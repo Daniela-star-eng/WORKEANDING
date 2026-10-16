@@ -1,0 +1,1049 @@
+{
+  "info": {
+    "name": "Workeando · Sprint 3 · API de perfil",
+    "description": "Pruebas de la API de edición de perfil (PB04 / HU01) sobre Supabase.\n\nAntes de correrla llena las variables de la colección: supabase_url, anon_key, email y password de un usuario de prueba ya registrado y confirmado. Después usa Run collection. Las peticiones 16 y 17 necesitan que elijas una imagen en Body > binary.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Iniciar sesión (obtener token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{anon_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/auth/v1/token?grant_type=password"
+        },
+        "description": "Inicia sesión con el usuario de prueba y guarda access_token y user_id en las variables de la colección.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login correcto (200)', () => pm.response.to.have.status(200));",
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('access_token', r.access_token);",
+              "pm.collectionVariables.set('user_id', r.user.id);",
+              "pm.test('Se guardó el token y el id del usuario', () => {",
+              "  pm.expect(r.access_token).to.be.a('string');",
+              "  pm.expect(r.user.id).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Consultar mi perfil",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{anon_key}}"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}&select=*"
+        },
+        "description": "GET de la fila del usuario con sesión. Guarda el nombre original para restaurarlo al final."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test('Regresa exactamente mi perfil', () => {",
+              "  pm.expect(p).to.have.lengthOf(1);",
+              "  pm.expect(p[0].id).to.eql(pm.collectionVariables.get('user_id'));",
+              "});",
+              "pm.test('Incluye las columnas del Sprint 3', () => {",
+              "  pm.expect(p[0]).to.have.all.keys('id','email','nombre','tipo_usuario','fecha_nacimiento','latitud','longitud','estado_cuenta','es_admin','telefono','foto_url','actualizado_en');",
+              "});",
+              "pm.collectionVariables.set('nombre_original', p[0].nombre);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Actualizar perfil (datos válidos)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{anon_key}}"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=representation"
+          }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+        },
+        "description": "HU01: el usuario agrega información de contacto, ubicación aproximada y define si es cliente o prestador.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"  Usuario Prueba Sprint3  \",\n  \"telefono\": \"442 123 4567\",\n  \"fecha_nacimiento\": \"2004-05-10\",\n  \"tipo_usuario\": \"PRESTADOR\",\n  \"latitud\": 20.588793,\n  \"longitud\": -100.389888\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+              "const p = pm.response.json()[0];",
+              "pm.test('Guarda los datos enviados', () => {",
+              "  pm.expect(p.tipo_usuario).to.eql('PRESTADOR');",
+              "  pm.expect(p.fecha_nacimiento).to.eql('2004-05-10');",
+              "});",
+              "pm.test('Normaliza nombre y teléfono', () => {",
+              "  pm.expect(p.nombre).to.eql('Usuario Prueba Sprint3');",
+              "  pm.expect(p.telefono).to.eql('4421234567');",
+              "});",
+              "pm.test('Guarda la ubicación APROXIMADA (3 decimales)', () => {",
+              "  pm.expect(Number(p.latitud)).to.eql(20.589);",
+              "  pm.expect(Number(p.longitud)).to.eql(-100.39);",
+              "});",
+              "pm.test('Actualiza la fecha de modificación', () => pm.expect(p.actualizado_en).to.be.a('string'));",
+              "pm.test('Responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Actualización parcial (solo teléfono)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{anon_key}}"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=representation"
+          }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+        },
+        "description": "PATCH solo modifica los campos enviados.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"telefono\": \"+524421112233\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+              "const p = pm.response.json()[0];",
+              "pm.test('Cambia solo el teléfono', () => {",
+              "  pm.expect(p.telefono).to.eql('+524421112233');",
+              "  pm.expect(p.tipo_usuario).to.eql('PRESTADOR');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validaciones (deben fallar con 400)",
+      "item": [
+        {
+          "name": "4. Nombre vacío",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Nombre obligatorio, mínimo 2 caracteres.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('nombre');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Nombre de más de 80 caracteres",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Máximo 80 caracteres.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('80');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Teléfono inválido",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "10 a 15 dígitos, + opcional.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"12ab\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('teléfono');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Tipo de usuario inválido",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Solo CLIENTE o PRESTADOR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo_usuario\": \"ADMIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('CLIENTE o PRESTADOR');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Fecha de nacimiento futura",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "No se permiten fechas futuras.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fecha_nacimiento\": \"2999-01-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('futuro');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Latitud fuera de rango",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Latitud entre -90 y 90.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitud\": 95,\n  \"longitud\": -100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('latitud');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Ubicación incompleta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Latitud y longitud van juntas.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitud\": 20.5,\n  \"longitud\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('latitud y longitud');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Foto sin https",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Solo URLs https.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"foto_url\": \"http://sitio.com/foto.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400 (dato inválido)', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje en español del servidor', () => {",
+                  "  const e = pm.response.json();",
+                  "  pm.expect(e.code).to.eql('22023');",
+                  "  pm.expect(e.message).to.include('https');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seguridad",
+      "item": [
+        {
+          "name": "12. Intentar hacerse administrador",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "es_admin, estado_cuenta y email no se pueden editar desde la app.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"es_admin\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403 (columna bloqueada)', () => pm.response.to.have.status(403));",
+                  "pm.test('Error de permisos 42501', () => pm.expect(pm.response.json().code).to.eql('42501'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Intentar reactivar cuenta (estado_cuenta)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado_cuenta\": \"ACTIVA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14. Intentar editar el perfil de otro usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{otro_user_id}}"
+            },
+            "description": "RLS filtra la fila: la respuesta es una lista vacía y no se modifica nada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Hackeado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('No modifica nada (RLS)', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.have.lengthOf(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Editar sin iniciar sesión",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "Sin header Authorization la API rechaza la petición.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Sin sesión\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Foto de perfil",
+      "item": [
+        {
+          "name": "16. Subir foto de perfil",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/jpeg"
+              },
+              {
+                "key": "x-upsert",
+                "value": "true"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/storage/v1/object/avatares/{{user_id}}/avatar.jpg"
+            },
+            "body": {
+              "mode": "file",
+              "file": {}
+            },
+            "description": "En Body > binary selecciona una imagen JPG de menos de 2 MB antes de enviar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Foto subida (200)', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('foto_url', pm.collectionVariables.get('supabase_url') + '/storage/v1/object/public/avatares/' + pm.collectionVariables.get('user_id') + '/avatar.jpg');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17. Subir foto en la carpeta de otro usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "image/jpeg"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/storage/v1/object/avatares/{{otro_user_id}}/avatar.jpg"
+            },
+            "body": {
+              "mode": "file",
+              "file": {}
+            },
+            "description": "Selecciona la misma imagen. Debe rechazarse por la política del bucket."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechazada por seguridad', () => pm.expect(pm.response.code).to.be.oneOf([400, 403]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18. Guardar URL de la foto en el perfil",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{anon_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "return=representation"
+              }
+            ],
+            "url": {
+              "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"foto_url\": \"{{foto_url}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Guarda la URL', () => pm.expect(pm.response.json()[0].foto_url).to.include('/avatares/'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "19. Restaurar datos de prueba",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "apikey",
+            "value": "{{anon_key}}"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Prefer",
+            "value": "return=representation"
+          }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/usuarios?id=eq.{{user_id}}"
+        },
+        "description": "Deja el usuario de prueba como estaba para poder repetir la colección.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"{{nombre_original}}\",\n  \"telefono\": null,\n  \"tipo_usuario\": \"CLIENTE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Datos restaurados', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "supabase_url",
+      "value": "https://TU-PROYECTO.supabase.co"
+    },
+    {
+      "key": "anon_key",
+      "value": "PEGA_AQUI_TU_ANON_KEY"
+    },
+    {
+      "key": "email",
+      "value": "prueba@workeando.com"
+    },
+    {
+      "key": "password",
+      "value": "PruebaSprint3"
+    },
+    {
+      "key": "otro_user_id",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "nombre_original",
+      "value": ""
+    },
+    {
+      "key": "foto_url",
+      "value": ""
+    }
+  ]
+}
