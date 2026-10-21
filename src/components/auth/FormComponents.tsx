@@ -215,6 +215,53 @@ export function elegirImagen(
   });
 }
 
+/* ---------- Foto de perfil redonda (registro del prestador) ---------- */
+export const AvatarField = ({
+  label,
+  imagen,
+  error,
+  onChange,
+}: {
+  label: string;
+  imagen: ImagenElegida | null;
+  error?: string;
+  onChange: (imagen: ImagenElegida) => void;
+}) => {
+  async function abrirOpciones() {
+    const elegida = await elegirImagen('Foto de perfil', { allowsEditing: true, aspect: [1, 1] });
+    if (elegida) onChange(elegida);
+  }
+
+  return (
+    <View style={[styles.fieldSpacing, { alignItems: 'center' }]}>
+      <Text style={[styles.label, { alignSelf: 'flex-start' }]}>{label}</Text>
+      <TouchableOpacity
+        onPress={abrirOpciones}
+        activeOpacity={0.85}
+        accessibilityLabel={imagen ? 'Cambiar foto de perfil' : 'Agregar foto de perfil'}>
+        <View
+          style={[
+            fs.avatar,
+            { borderWidth: 2, borderColor: error ? colors.error : colors.primarySoft },
+          ]}>
+          {imagen ? (
+            <Image source={{ uri: imagen.uri }} style={{ width: '100%', height: '100%' }} />
+          ) : (
+            <Ionicons name="person-outline" size={40} color={colors.primary} />
+          )}
+        </View>
+        <View style={fs.avatarBadge}>
+          <Ionicons name={imagen ? 'camera' : 'add'} size={16} color={colors.white} />
+        </View>
+      </TouchableOpacity>
+      <Text style={[fs.toggleHint, { marginTop: 8, textAlign: 'center' }]}>
+        Los clientes confían más en prestadores con foto.
+      </Text>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+};
+
 /* ---------- Campo para subir foto con vista previa ---------- */
 export const ImageUploadField = ({
   label,

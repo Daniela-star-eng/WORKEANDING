@@ -1,0 +1,1139 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+      "title": "Workeando API · Publicaciones (Sprint 4)",
+      "version": "1.0.0",
+      "description": "API REST para publicar productos y servicios en renta (PB-04 / PB-05).\n\n**Arquitectura:** App (Expo) → API (rutas de Expo Router en `src/app/api`) → Base de datos (Supabase/PostgreSQL).\n\n**Autenticación:** encabezado `Authorization: Bearer <access_token>` con el token de la sesión de Supabase (`supabase.auth.getSession()` en la app, o la petición 0 de la colección de Postman).\n\n**Flujo para publicar:**\n1. `GET /api/categories` para llenar el selector de categoría.\n2. Subir cada foto a Supabase Storage, bucket `publicaciones`, en la ruta `<id del usuario>/<nombre>.jpg` (en la app: `subirImagenesPublicacion()` de `src/services/publicaciones.ts`).\n3. `POST /api/publications` con los datos y las rutas de las fotos.\n\n**Base de datos:** tablas `categorias`, `publicaciones`, `imagenes_publicacion` y `registros_moderacion` (migración `supabase/03_sprint4_publicaciones.sql`).\n\n**Validaciones:** se aplican en cadena (Chain of Responsibility) en la API y otra vez en la base de datos. Si algún campo falla, la respuesta 400 trae `error.campos` con un mensaje por campo para mostrarlo en el formulario.\n\n**Formato de errores:** siempre `{ \"error\": { \"codigo\", \"mensaje\", \"campos\"? } }`."
+    },
+    "servers": [
+      {
+        "url": "http://localhost:8081",
+        "description": "Desarrollo (npx expo start)"
+      },
+      {
+        "url": "{origen}",
+        "description": "Servidor desplegado (EAS Hosting)",
+        "variables": {
+          "origen": {
+            "default": "https://workeando.expo.app"
+          }
+        }
+      }
+    ],
+    "tags": [
+      {
+        "name": "Categorías",
+        "description": "Catálogo de categorías de productos y servicios"
+      },
+      {
+        "name": "Publicaciones",
+        "description": "Crear y consultar publicaciones en renta"
+      }
+    ],
+    "paths": {
+      "/api/categories": {
+        "get": {
+          "tags": [
+            "Categorías"
+          ],
+          "summary": "Listar categorías",
+          "description": "Regresa las categorías activas ordenadas. Cada categoría es de `PRODUCTO` o de `SERVICIO`; el tipo de la publicación se toma de su categoría. No requiere sesión.",
+          "operationId": "listarCategorias",
+          "parameters": [
+            {
+              "name": "tipo",
+              "in": "query",
+              "required": false,
+              "description": "Filtra por tipo",
+              "schema": {
+                "$ref": "#/components/schemas/TipoPublicacion"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Lista de categorías",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data"
+                    ],
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/Categoria"
+                        }
+                      }
+                    }
+                  },
+                  "example": {
+                    "data": [
+                      {
+                        "id": 1,
+                        "nombre": "Herramientas y maquinaria",
+                        "slug": "herramientas",
+                        "tipo": "PRODUCTO",
+                        "icono": "hammer-outline",
+                        "orden": 1,
+                        "solo_mayores": false
+                      },
+                      {
+                        "id": 12,
+                        "nombre": "Electricidad",
+                        "slug": "electricidad",
+                        "tipo": "SERVICIO",
+                        "icono": "flash-outline",
+                        "orden": 12,
+                        "solo_mayores": false
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Parámetro inválido",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "tipo": {
+                      "summary": "tipo inválido",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "El parámetro tipo debe ser PRODUCTO o SERVICIO."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error inesperado del servidor",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "interno": {
+                      "summary": "Error interno",
+                      "value": {
+                        "error": {
+                          "codigo": "ERROR_INTERNO",
+                          "mensaje": "Ocurrió un error inesperado. Inténtalo de nuevo."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/publications": {
+        "post": {
+          "tags": [
+            "Publicaciones"
+          ],
+          "summary": "Crear publicación",
+          "description": "Crea una publicación de un producto o servicio para renta. Solo para usuarios **PRESTADOR** con cuenta activa y **foto de perfil**.\n\nOrden de la cadena de validación: prestador → foto de perfil → límite de 20 publicaciones → título → descripción → precio → categoría → ubicación → fotografías → fotografías propias → contenido restringido.\n\n- Si no se manda ubicación se usa la del perfil del prestador (redondeada a 3 decimales, ~100 m).\n- La disponibilidad inicial siempre es `DISPONIBLE`.\n- Si el texto menciona productos restringidos (armas, drogas, etc.) la publicación se guarda con `estado_moderacion` = `PENDIENTE` y no es visible para clientes hasta que se apruebe.",
+          "operationId": "crearPublicacion",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NuevaPublicacion"
+                },
+                "examples": {
+                  "producto": {
+                    "summary": "Producto (taladro por día)",
+                    "value": {
+                      "titulo": "Taladro percutor Bosch",
+                      "descripcion": "Taladro de 750W con brocas incluidas, ideal para concreto.",
+                      "precio": 150,
+                      "unidad_precio": "DIA",
+                      "categoria_id": 1,
+                      "imagenes": [
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                      ]
+                    }
+                  },
+                  "servicio": {
+                    "summary": "Servicio (electricista por hora) con ubicación",
+                    "value": {
+                      "titulo": "Instalaciones eléctricas residenciales",
+                      "descripcion": "Instalo contactos, apagadores y lámparas. 8 años de experiencia.",
+                      "precio": 250,
+                      "unidad_precio": "HORA",
+                      "categoria_id": 12,
+                      "latitud": 20.5888,
+                      "longitud": -100.3899,
+                      "imagenes": [
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/trabajo-1.jpg",
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/trabajo-2.jpg"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Publicación creada",
+              "headers": {
+                "Location": {
+                  "description": "URL del detalle",
+                  "schema": {
+                    "type": "string",
+                    "example": "/api/publications/7a97cccd-2e4d-49e9-a213-e24b2c73cacc"
+                  }
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data",
+                      "avisos"
+                    ],
+                    "properties": {
+                      "data": {
+                        "$ref": "#/components/schemas/Publicacion"
+                      },
+                      "avisos": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mensajes para el usuario (p. ej. publicación en revisión)"
+                      }
+                    }
+                  },
+                  "examples": {
+                    "publicada": {
+                      "summary": "Publicada",
+                      "value": {
+                        "data": {
+                          "id": "7a97cccd-2e4d-49e9-a213-e24b2c73cacc",
+                          "usuario_id": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a",
+                          "tipo": "PRODUCTO",
+                          "titulo": "Taladro percutor Bosch",
+                          "descripcion": "Taladro de 750W con brocas incluidas, ideal para concreto.",
+                          "precio": 150,
+                          "unidad_precio": "DIA",
+                          "latitud": 20.589,
+                          "longitud": -100.39,
+                          "disponibilidad": "DISPONIBLE",
+                          "creado_en": "2026-10-16T17:20:57.142Z",
+                          "actualizado_en": "2026-10-16T17:20:57.142Z",
+                          "categoria": {
+                            "id": 1,
+                            "nombre": "Herramientas y maquinaria",
+                            "slug": "herramientas",
+                            "tipo": "PRODUCTO"
+                          },
+                          "imagenes": [
+                            {
+                              "id": "47d5992d-694b-4c73-9ed4-460df7ecfb5d",
+                              "ruta": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg",
+                              "orden": 1,
+                              "url": "https://TU-PROYECTO.supabase.co/storage/v1/object/public/publicaciones/3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                            }
+                          ],
+                          "estado_moderacion": "APROBADA",
+                          "destacada": false
+                        },
+                        "avisos": []
+                      }
+                    },
+                    "en_revision": {
+                      "summary": "En revisión por moderación",
+                      "value": {
+                        "data": {
+                          "id": "7a97cccd-2e4d-49e9-a213-e24b2c73cacc",
+                          "usuario_id": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a",
+                          "tipo": "PRODUCTO",
+                          "titulo": "Taladro percutor Bosch",
+                          "descripcion": "Taladro de 750W con brocas incluidas, ideal para concreto.",
+                          "precio": 150,
+                          "unidad_precio": "DIA",
+                          "latitud": 20.589,
+                          "longitud": -100.39,
+                          "disponibilidad": "DISPONIBLE",
+                          "creado_en": "2026-10-16T17:20:57.142Z",
+                          "actualizado_en": "2026-10-16T17:20:57.142Z",
+                          "categoria": {
+                            "id": 1,
+                            "nombre": "Herramientas y maquinaria",
+                            "slug": "herramientas",
+                            "tipo": "PRODUCTO"
+                          },
+                          "imagenes": [
+                            {
+                              "id": "47d5992d-694b-4c73-9ed4-460df7ecfb5d",
+                              "ruta": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg",
+                              "orden": 1,
+                              "url": "https://TU-PROYECTO.supabase.co/storage/v1/object/public/publicaciones/3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                            }
+                          ],
+                          "estado_moderacion": "PENDIENTE",
+                          "destacada": false
+                        },
+                        "avisos": [
+                          "Tu publicación quedó en revisión y será visible cuando un moderador la apruebe."
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Datos inválidos: `error.campos` trae un mensaje por campo",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "campos": {
+                      "summary": "Varios campos con error",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "Revisa los datos de la publicación.",
+                          "campos": {
+                            "titulo": "El título debe tener al menos 5 caracteres.",
+                            "precio": "El precio debe ser mayor a 0.",
+                            "categoria_id": "Selecciona una categoría.",
+                            "imagenes": "Agrega al menos una fotografía."
+                          }
+                        }
+                      }
+                    },
+                    "cuerpo": {
+                      "summary": "Cuerpo que no es JSON",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "El cuerpo debe ser un objeto JSON.",
+                          "campos": {
+                            "cuerpo": "Envía los datos de la publicación en formato JSON."
+                          }
+                        }
+                      }
+                    },
+                    "foto_no_subida": {
+                      "summary": "La foto no existe en Storage",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "No se encontró la fotografía 3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/noexiste.jpg. Súbela antes de publicar.",
+                          "campos": {
+                            "imagenes": "No se encontró la fotografía 3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/noexiste.jpg. Súbela antes de publicar."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "$ref": "#/components/responses/NoAutenticado"
+            },
+            "403": {
+              "description": "El usuario no puede publicar",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "cliente": {
+                      "summary": "Es cliente",
+                      "value": {
+                        "error": {
+                          "codigo": "SIN_PERMISO",
+                          "mensaje": "Solo los prestadores pueden publicar. Cambia tu tipo de cuenta en tu perfil."
+                        }
+                      }
+                    },
+                    "sin_foto": {
+                      "summary": "Sin foto de perfil",
+                      "value": {
+                        "error": {
+                          "codigo": "PERFIL_INCOMPLETO",
+                          "mensaje": "Sube tu foto de perfil antes de publicar."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Límite de publicaciones alcanzado",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "limite": {
+                      "summary": "20 publicaciones activas",
+                      "value": {
+                        "error": {
+                          "codigo": "LIMITE_ALCANZADO",
+                          "mensaje": "Alcanzaste el máximo de 20 publicaciones activas."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error inesperado del servidor",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "interno": {
+                      "summary": "Error interno",
+                      "value": {
+                        "error": {
+                          "codigo": "ERROR_INTERNO",
+                          "mensaje": "Ocurrió un error inesperado. Inténtalo de nuevo."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Publicaciones"
+          ],
+          "summary": "Listar publicaciones",
+          "description": "Sin `mias`: publicaciones **APROBADAS** y **DISPONIBLES** (lo que ven los clientes): primero las destacadas y luego las más nuevas. Requiere sesión.\n\nCon `mias=true`: todas las publicaciones del prestador, en cualquier estado de moderación.",
+          "operationId": "listarPublicaciones",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "categoria_id",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "description": "Filtra por categoría"
+            },
+            {
+              "name": "tipo",
+              "in": "query",
+              "schema": {
+                "$ref": "#/components/schemas/TipoPublicacion"
+              }
+            },
+            {
+              "name": "mias",
+              "in": "query",
+              "schema": {
+                "type": "boolean",
+                "default": false
+              },
+              "description": "Solo mis publicaciones (requiere sesión)"
+            },
+            {
+              "name": "limite",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 20
+              }
+            },
+            {
+              "name": "pagina",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Página de publicaciones",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data",
+                      "paginacion"
+                    ],
+                    "properties": {
+                      "data": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/Publicacion"
+                        }
+                      },
+                      "paginacion": {
+                        "$ref": "#/components/schemas/Paginacion"
+                      }
+                    }
+                  },
+                  "example": {
+                    "data": [
+                      {
+                        "id": "7a97cccd-2e4d-49e9-a213-e24b2c73cacc",
+                        "usuario_id": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a",
+                        "tipo": "PRODUCTO",
+                        "titulo": "Taladro percutor Bosch",
+                        "descripcion": "Taladro de 750W con brocas incluidas, ideal para concreto.",
+                        "precio": 150,
+                        "unidad_precio": "DIA",
+                        "latitud": 20.589,
+                        "longitud": -100.39,
+                        "disponibilidad": "DISPONIBLE",
+                        "creado_en": "2026-10-16T17:20:57.142Z",
+                        "actualizado_en": "2026-10-16T17:20:57.142Z",
+                        "categoria": {
+                          "id": 1,
+                          "nombre": "Herramientas y maquinaria",
+                          "slug": "herramientas",
+                          "tipo": "PRODUCTO"
+                        },
+                        "imagenes": [
+                          {
+                            "id": "47d5992d-694b-4c73-9ed4-460df7ecfb5d",
+                            "ruta": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg",
+                            "orden": 1,
+                            "url": "https://TU-PROYECTO.supabase.co/storage/v1/object/public/publicaciones/3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                          }
+                        ],
+                        "estado_moderacion": "APROBADA",
+                        "destacada": false
+                      }
+                    ],
+                    "paginacion": {
+                      "pagina": 1,
+                      "limite": 20,
+                      "total": 1,
+                      "paginas": 1
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Parámetros inválidos",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "limite": {
+                      "summary": "limite fuera de rango",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "limite debe ser un entero entre 1 y 50."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "$ref": "#/components/responses/NoAutenticado"
+            },
+            "500": {
+              "description": "Error inesperado del servidor",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "interno": {
+                      "summary": "Error interno",
+                      "value": {
+                        "error": {
+                          "codigo": "ERROR_INTERNO",
+                          "mensaje": "Ocurrió un error inesperado. Inténtalo de nuevo."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/publications/{id}": {
+        "get": {
+          "tags": [
+            "Publicaciones"
+          ],
+          "summary": "Detalle de una publicación",
+          "description": "Requiere sesión. Regresa una publicación APROBADA; el prestador también puede ver las suyas PENDIENTES.",
+          "operationId": "obtenerPublicacion",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Publicación",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data"
+                    ],
+                    "properties": {
+                      "data": {
+                        "$ref": "#/components/schemas/Publicacion"
+                      }
+                    }
+                  },
+                  "example": {
+                    "data": {
+                      "id": "7a97cccd-2e4d-49e9-a213-e24b2c73cacc",
+                      "usuario_id": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a",
+                      "tipo": "PRODUCTO",
+                      "titulo": "Taladro percutor Bosch",
+                      "descripcion": "Taladro de 750W con brocas incluidas, ideal para concreto.",
+                      "precio": 150,
+                      "unidad_precio": "DIA",
+                      "latitud": 20.589,
+                      "longitud": -100.39,
+                      "disponibilidad": "DISPONIBLE",
+                      "creado_en": "2026-10-16T17:20:57.142Z",
+                      "actualizado_en": "2026-10-16T17:20:57.142Z",
+                      "categoria": {
+                        "id": 1,
+                        "nombre": "Herramientas y maquinaria",
+                        "slug": "herramientas",
+                        "tipo": "PRODUCTO"
+                      },
+                      "imagenes": [
+                        {
+                          "id": "47d5992d-694b-4c73-9ed4-460df7ecfb5d",
+                          "ruta": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg",
+                          "orden": 1,
+                          "url": "https://TU-PROYECTO.supabase.co/storage/v1/object/public/publicaciones/3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                        }
+                      ],
+                      "estado_moderacion": "APROBADA",
+                      "destacada": false
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "id inválido",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "id": {
+                      "summary": "No es UUID",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "El id de la publicación no es válido."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "$ref": "#/components/responses/NoAutenticado"
+            },
+            "404": {
+              "description": "No existe o no es visible",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "no": {
+                      "summary": "No encontrada",
+                      "value": {
+                        "error": {
+                          "codigo": "NO_ENCONTRADO",
+                          "mensaje": "La publicación no existe o no está disponible."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error inesperado del servidor",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "interno": {
+                      "summary": "Error interno",
+                      "value": {
+                        "error": {
+                          "codigo": "ERROR_INTERNO",
+                          "mensaje": "Ocurrió un error inesperado. Inténtalo de nuevo."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "securitySchemes": {
+        "bearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT",
+          "description": "access_token de la sesión de Supabase"
+        }
+      },
+      "schemas": {
+        "TipoPublicacion": {
+          "type": "string",
+          "enum": [
+            "PRODUCTO",
+            "SERVICIO"
+          ]
+        },
+        "UnidadPrecio": {
+          "type": "string",
+          "enum": [
+            "HORA",
+            "DIA",
+            "SEMANA",
+            "MES",
+            "EVENTO",
+            "SERVICIO"
+          ],
+          "description": "Por qué se cobra el precio"
+        },
+        "Categoria": {
+          "type": "object",
+          "required": [
+            "id",
+            "nombre",
+            "slug",
+            "tipo",
+            "orden",
+            "solo_mayores"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "example": 1
+            },
+            "nombre": {
+              "type": "string",
+              "example": "Herramientas y maquinaria"
+            },
+            "slug": {
+              "type": "string",
+              "example": "herramientas"
+            },
+            "tipo": {
+              "$ref": "#/components/schemas/TipoPublicacion"
+            },
+            "icono": {
+              "type": "string",
+              "nullable": true,
+              "description": "Nombre de ícono de Ionicons",
+              "example": "hammer-outline"
+            },
+            "orden": {
+              "type": "integer",
+              "example": 1
+            },
+            "solo_mayores": {
+              "type": "boolean",
+              "description": "Contenido solo para mayores de edad"
+            }
+          }
+        },
+        "NuevaPublicacion": {
+          "type": "object",
+          "required": [
+            "titulo",
+            "descripcion",
+            "precio",
+            "categoria_id",
+            "imagenes"
+          ],
+          "properties": {
+            "titulo": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 100,
+              "description": "Se recortan espacios dobles",
+              "example": "Taladro percutor Bosch"
+            },
+            "descripcion": {
+              "type": "string",
+              "minLength": 20,
+              "maxLength": 2000,
+              "example": "Taladro de 750W con brocas incluidas, ideal para concreto."
+            },
+            "precio": {
+              "type": "number",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 999999.99,
+              "description": "Pesos MXN, se redondea a 2 decimales",
+              "example": 150
+            },
+            "unidad_precio": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/UnidadPrecio"
+                }
+              ],
+              "default": "DIA"
+            },
+            "categoria_id": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "id de GET /api/categories",
+              "example": 1
+            },
+            "imagenes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "uniqueItems": true,
+              "description": "Rutas en el bucket `publicaciones`, dentro de la carpeta del usuario. La primera es la portada.",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f-]{36}/[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$",
+                "example": "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+              }
+            },
+            "latitud": {
+              "type": "number",
+              "nullable": true,
+              "minimum": -90,
+              "maximum": 90,
+              "description": "Opcional; va junto con longitud. Si falta se usa la del perfil."
+            },
+            "longitud": {
+              "type": "number",
+              "nullable": true,
+              "minimum": -180,
+              "maximum": 180
+            }
+          }
+        },
+        "Imagen": {
+          "type": "object",
+          "required": [
+            "id",
+            "url",
+            "orden"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "URL pública para mostrar la foto"
+            },
+            "ruta": {
+              "type": "string",
+              "nullable": true,
+              "description": "Archivo en el bucket publicaciones"
+            },
+            "orden": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "1 = portada"
+            }
+          }
+        },
+        "Publicacion": {
+          "type": "object",
+          "required": [
+            "id",
+            "usuario_id",
+            "tipo",
+            "titulo",
+            "descripcion",
+            "precio",
+            "unidad_precio",
+            "disponibilidad",
+            "estado_moderacion",
+            "categoria",
+            "imagenes",
+            "creado_en",
+            "actualizado_en",
+            "destacada"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "usuario_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "tipo": {
+              "$ref": "#/components/schemas/TipoPublicacion"
+            },
+            "titulo": {
+              "type": "string"
+            },
+            "descripcion": {
+              "type": "string"
+            },
+            "precio": {
+              "type": "number"
+            },
+            "unidad_precio": {
+              "$ref": "#/components/schemas/UnidadPrecio"
+            },
+            "latitud": {
+              "type": "number",
+              "nullable": true,
+              "description": "Aproximada (3 decimales)"
+            },
+            "longitud": {
+              "type": "number",
+              "nullable": true
+            },
+            "disponibilidad": {
+              "type": "string",
+              "enum": [
+                "DISPONIBLE",
+                "NO_DISPONIBLE",
+                "EN_RENTA"
+              ]
+            },
+            "categoria": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "nombre": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "tipo": {
+                  "$ref": "#/components/schemas/TipoPublicacion"
+                }
+              }
+            },
+            "imagenes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Imagen"
+              }
+            },
+            "creado_en": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "actualizado_en": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "estado_moderacion": {
+              "type": "string",
+              "enum": [
+                "PENDIENTE",
+                "APROBADA",
+                "RECHAZADA"
+              ],
+              "description": "APROBADA = visible para clientes; PENDIENTE = en revisión"
+            },
+            "destacada": {
+              "type": "boolean",
+              "description": "Publicación destacada (Sprint 11)"
+            }
+          }
+        },
+        "Paginacion": {
+          "type": "object",
+          "properties": {
+            "pagina": {
+              "type": "integer"
+            },
+            "limite": {
+              "type": "integer"
+            },
+            "total": {
+              "type": "integer"
+            },
+            "paginas": {
+              "type": "integer"
+            }
+          }
+        },
+        "RespuestaError": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "type": "object",
+              "required": [
+                "codigo",
+                "mensaje"
+              ],
+              "properties": {
+                "codigo": {
+                  "type": "string",
+                  "enum": [
+                    "VALIDACION",
+                    "NO_AUTENTICADO",
+                    "SIN_PERMISO",
+                    "PERFIL_INCOMPLETO",
+                    "LIMITE_ALCANZADO",
+                    "NO_ENCONTRADO",
+                    "ERROR_INTERNO"
+                  ]
+                },
+                "mensaje": {
+                  "type": "string",
+                  "description": "Mensaje en español para mostrar al usuario"
+                },
+                "campos": {
+                  "type": "object",
+                  "description": "Solo en errores de validación: mensaje por campo",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "cuerpo": {
+                      "type": "string"
+                    },
+                    "titulo": {
+                      "type": "string"
+                    },
+                    "descripcion": {
+                      "type": "string"
+                    },
+                    "precio": {
+                      "type": "string"
+                    },
+                    "unidad_precio": {
+                      "type": "string"
+                    },
+                    "categoria_id": {
+                      "type": "string"
+                    },
+                    "imagenes": {
+                      "type": "string"
+                    },
+                    "ubicacion": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "NoAutenticado": {
+          "description": "Sin sesión o token inválido",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespuestaError"
+              },
+              "examples": {
+                "sin_token": {
+                  "summary": "Falta el token",
+                  "value": {
+                    "error": {
+                      "codigo": "NO_AUTENTICADO",
+                      "mensaje": "Inicia sesión: falta el encabezado Authorization: Bearer <token>."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }

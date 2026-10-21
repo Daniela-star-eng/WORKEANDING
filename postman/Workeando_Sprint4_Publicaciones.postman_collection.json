@@ -1,0 +1,1535 @@
+{
+	"item": [
+		{
+			"name": "0. Preparación",
+			"item": [
+				{
+					"name": "0.1 Login prestador",
+					"request": {
+						"description": {
+							"content": "Inicia sesión directo en Supabase Auth y guarda el token en las variables.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"host": [
+								"{{supabase_url}}"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "password"
+								}
+							]
+						},
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Login correcto (200)', () => pm.response.to.have.status(200));",
+									"const r = pm.response.json();",
+									"pm.collectionVariables.set('access_token', r.access_token);",
+									"pm.collectionVariables.set('user_id', r.user.id);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.2 Login cliente",
+					"request": {
+						"description": {
+							"content": "Inicia sesión directo en Supabase Auth y guarda el token en las variables.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"host": [
+								"{{supabase_url}}"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "password"
+								}
+							]
+						},
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{email_cliente}}\",\n  \"password\": \"{{password_cliente}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Login correcto (200)', () => pm.response.to.have.status(200));",
+									"const r = pm.response.json();",
+									"pm.collectionVariables.set('token_cliente', r.access_token);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.3 Subir foto de la publicación a Storage",
+					"request": {
+						"description": "Sube postman/foto_prueba.jpg al bucket publicaciones. Pon cualquier JPG de menos de 5 MB con ese nombre en la carpeta postman/. En la app de Postman también puedes elegirla en Body > binary.",
+						"url": {
+							"raw": "{{supabase_url}}/storage/v1/object/publicaciones/{{imagen_ruta}}",
+							"path": [
+								"storage",
+								"v1",
+								"object",
+								"publicaciones",
+								"{{imagen_ruta}}"
+							],
+							"host": [
+								"{{supabase_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "image/jpeg"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "foto_prueba.jpg"
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('imagen_ruta', pm.collectionVariables.get('user_id') + '/postman-' + Date.now() + '.jpg');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Foto subida (200)', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1. GET /api/categories",
+			"item": [
+				{
+					"name": "1.1 Listar todas las categorías",
+					"request": {
+						"description": {
+							"content": "No requiere sesión. Guarda la primera categoría de PRODUCTO en categoria_id.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/categories",
+							"path": [
+								"api",
+								"categories"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"const d = pm.response.json().data;",
+									"pm.test('Regresa categorías', () => pm.expect(d.length).to.be.above(0));",
+									"pm.test('Cada categoría tiene id, nombre, slug y tipo', () => d.forEach(c => pm.expect(c).to.include.keys('id','nombre','slug','tipo')));",
+									"pm.collectionVariables.set('categoria_id', d.find(c => c.tipo === 'PRODUCTO').id);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.2 Filtrar por tipo=SERVICIO",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/categories?tipo=SERVICIO",
+							"path": [
+								"api",
+								"categories"
+							],
+							"host": [
+								"{{base_url}}"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "SERVICIO"
+								}
+							]
+						},
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Solo servicios', () => pm.response.json().data.forEach(c => pm.expect(c.tipo).to.eql('SERVICIO')));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.3 Tipo inválido - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/categories?tipo=OTRO",
+							"path": [
+								"api",
+								"categories"
+							],
+							"host": [
+								"{{base_url}}"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "OTRO"
+								}
+							]
+						},
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. POST /api/publications (éxito)",
+			"item": [
+				{
+					"name": "2.1 Crear publicación válida",
+					"request": {
+						"description": {
+							"content": "Requiere que el prestador tenga foto de perfil (si no, responde 403 PERFIL_INCOMPLETO).",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"  Taladro   percutor Bosch \",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 149.999,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 201', () => pm.response.to.have.status(201));",
+									"const p = pm.response.json().data;",
+									"pm.collectionVariables.set('publicacion_id', p.id);",
+									"pm.test('Queda APROBADA y DISPONIBLE', () => { pm.expect(p.estado_moderacion).to.eql('APROBADA'); pm.expect(p.disponibilidad).to.eql('DISPONIBLE'); });",
+									"pm.test('Normaliza título y precio', () => { pm.expect(p.titulo).to.eql('Taladro percutor Bosch'); pm.expect(p.precio).to.eql(150); });",
+									"pm.test('Trae categoría e imágenes con URL', () => { pm.expect(p.categoria.id).to.eql(pm.collectionVariables.get('categoria_id')); pm.expect(p.imagenes[0].url).to.include('/publicaciones/'); });",
+									"pm.test('Encabezado Location', () => pm.expect(pm.response.headers.get('Location')).to.eql('/api/publications/' + p.id));",
+									"pm.test('Responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.2 Detalle de la publicación",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}",
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Es la publicación creada', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('publicacion_id')));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.3 Visible para clientes (lista pública)",
+					"request": {
+						"description": {
+							"content": "Validar visibilidad de publicaciones para clientes (Sprint 4).",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications?categoria_id={{categoria_id}}&limite=50",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							],
+							"query": [
+								{
+									"key": "categoria_id",
+									"value": "{{categoria_id}}"
+								},
+								{
+									"key": "limite",
+									"value": "50"
+								}
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_cliente}}"
+							}
+						],
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Aparece en la lista', () => pm.expect(pm.response.json().data.map(p => p.id)).to.include(pm.collectionVariables.get('publicacion_id')));",
+									"pm.test('Trae paginación', () => pm.expect(pm.response.json().paginacion).to.include.keys('pagina','limite','total','paginas'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.4 Mis publicaciones (mias=true)",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications?mias=true",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							],
+							"query": [
+								{
+									"key": "mias",
+									"value": "true"
+								}
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Todas son mías', () => pm.response.json().data.forEach(p => pm.expect(p.usuario_id).to.eql(pm.collectionVariables.get('user_id'))));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Validaciones (400)",
+			"item": [
+				{
+					"name": "3.1 Título corto",
+					"request": {
+						"description": {
+							"content": "Mínimo 5 caracteres.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Hey\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo titulo', () => pm.expect(e.campos).to.have.property('titulo'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['titulo']).to.include('5'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.2 Título de más de 100",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo titulo', () => pm.expect(e.campos).to.have.property('titulo'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['titulo']).to.include('100'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.3 Descripción corta",
+					"request": {
+						"description": {
+							"content": "Mínimo 20 caracteres.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Muy corta\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo descripcion', () => pm.expect(e.campos).to.have.property('descripcion'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['descripcion']).to.include('20'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.4 Precio 0",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 0,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo precio', () => pm.expect(e.campos).to.have.property('precio'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['precio']).to.include('mayor a 0'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.5 Precio que no es número",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": \"diez\",\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo precio', () => pm.expect(e.campos).to.have.property('precio'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['precio']).to.include('número'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.6 Unidad de precio inválida",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"SIGLO\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo unidad_precio', () => pm.expect(e.campos).to.have.property('unidad_precio'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.7 Categoría inexistente",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": 9999,\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo categoria_id', () => pm.expect(e.campos).to.have.property('categoria_id'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['categoria_id']).to.include('no existe'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.8 Sin fotografías",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('al menos una'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.9 Foto que no se subió",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{user_id}}/no-existe.jpg\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('No se encontró'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.10 Foto de otro usuario",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"00000000-0000-0000-0000-000000000000/ajena.jpg\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('subiste'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.11 Ubicación incompleta",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ],\n  \"latitud\": 20.5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo ubicacion', () => pm.expect(e.campos).to.have.property('ubicacion'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['ubicacion']).to.include('latitud y longitud'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.12 Cuerpo que no es JSON",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "esto no es json",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo cuerpo', () => pm.expect(e.campos).to.have.property('cuerpo'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "3.13 Varios campos mal a la vez",
+					"request": {
+						"description": {
+							"content": "La respuesta trae un mensaje por campo para el formulario.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"\",\n  \"descripcion\": \"\",\n  \"precio\": -1,\n  \"imagenes\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"pm.test('Marca todos los campos', () => pm.expect(pm.response.json().error.campos).to.include.keys('titulo','descripcion','precio','categoria_id','imagenes'));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Seguridad y reglas",
+			"item": [
+				{
+					"name": "4.1 Sin sesión - 401",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 401', () => pm.response.to.have.status(401));",
+									"pm.test('Código NO_AUTENTICADO', () => pm.expect(pm.response.json().error.codigo).to.eql('NO_AUTENTICADO'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.2 Un cliente intenta publicar - 403",
+					"request": {
+						"description": {
+							"content": "Solo los prestadores publican.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_cliente}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro percutor Bosch\",\n  \"descripcion\": \"Taladro de 750W con brocas incluidas, ideal para concreto.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 403', () => pm.response.to.have.status(403));",
+									"pm.test('Código SIN_PERMISO', () => pm.expect(pm.response.json().error.codigo).to.eql('SIN_PERMISO'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.3 Mis publicaciones sin sesión - 401",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications?mias=true",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							],
+							"query": [
+								{
+									"key": "mias",
+									"value": "true"
+								}
+							]
+						},
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 401', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.4 Lista de publicaciones sin sesión - 401",
+					"request": {
+						"description": {
+							"content": "Las publicaciones solo las ven usuarios con sesión (política \"Publicaciones visibles\").",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 401', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.5 Texto restringido - PENDIENTE de moderación",
+					"request": {
+						"description": {
+							"content": "Moderación (Problema 4): se guarda con estado_moderacion PENDIENTE, no es visible para clientes y queda registrado en registros_moderacion.",
+							"type": "text/plain"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"path": [
+								"api",
+								"publications"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"method": "POST",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Pistola de gotcha\",\n  \"descripcion\": \"Incluye municiones de pintura para tus eventos.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\n    \"{{imagen_ruta}}\"\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 201', () => pm.response.to.have.status(201));",
+									"const r = pm.response.json();",
+									"pm.collectionVariables.set('publicacion_revision_id', r.data.id);",
+									"pm.test('Queda PENDIENTE de moderación con aviso', () => { pm.expect(r.data.estado_moderacion).to.eql('PENDIENTE'); pm.expect(r.avisos).to.have.lengthOf(1); });"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.6 Un cliente no ve la publicación en revisión - 404",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_revision_id}}",
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_revision_id}}"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_cliente}}"
+							}
+						],
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 404', () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "4.7 Id inválido - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/123",
+							"path": [
+								"api",
+								"publications",
+								"123"
+							],
+							"host": [
+								"{{base_url}}"
+							]
+						},
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"method": "GET"
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"type": "any",
+			"value": "http://localhost:8081",
+			"key": "base_url"
+		},
+		{
+			"type": "any",
+			"value": "https://TU-PROYECTO.supabase.co",
+			"key": "supabase_url"
+		},
+		{
+			"type": "any",
+			"value": "PEGA_AQUI_TU_ANON_KEY",
+			"key": "anon_key"
+		},
+		{
+			"type": "any",
+			"value": "prestador@workeando.com",
+			"key": "email"
+		},
+		{
+			"type": "any",
+			"value": "PruebaSprint4",
+			"key": "password"
+		},
+		{
+			"type": "any",
+			"value": "cliente@workeando.com",
+			"key": "email_cliente"
+		},
+		{
+			"type": "any",
+			"value": "PruebaSprint4",
+			"key": "password_cliente"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "access_token"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "token_cliente"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "user_id"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "categoria_id"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "imagen_ruta"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "publicacion_id"
+		},
+		{
+			"type": "any",
+			"value": "",
+			"key": "publicacion_revision_id"
+		}
+	],
+	"info": {
+		"_postman_id": "a52e9882-684e-47bd-a3c7-870d040c9343",
+		"name": "Workeando Sprint 4 - API de publicaciones",
+		"description": "Pruebas de POST /api/publications, GET /api/publications y GET /api/categories.\n\nAntes de correrla:\n1. Ejecuta supabase/03_sprint4_publicaciones.sql en Supabase (trabaja sobre las tablas que ya existen).\n2. Arranca la app con `npx expo start` (base_url = http://localhost:8081).\n3. Llena las variables: supabase_url, anon_key, email/password de un PRESTADOR con foto de perfil y email_cliente/password_cliente de un CLIENTE.\n4. En la petición 0.3 elige una imagen JPG en Body > binary.\n5. Run collection.\n\nDocumentación interactiva: {{base_url}}/api/docs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	}
+}
