@@ -5,7 +5,7 @@ import {
   validarEmail,
   type TipoUsuario,
 } from '@/services/auth';
-import { limpiarTelefono, TELEFONO_REGEX } from '@/services/perfil';
+import { limpiarTelefono, subirFotoPerfil, TELEFONO_REGEX } from '@/services/perfil';
 
 // =====================================================================
 // Registro de clientes y prestadores (sin UI).
@@ -24,6 +24,7 @@ export type ErroresRegistro = Partial<
     | 'categoria'
     | 'experiencia'
     | 'foto'
+    | 'fotoPerfil'
     | 'terminos',
     string
   >
@@ -46,7 +47,10 @@ export type DatosPrestador = {
   experiencia: string;
   herramientasPropias: boolean;
   password: string;
+  /** Foto de la identificación oficial (bucket privado) */
   foto: string | null;
+  /** Foto de perfil pública (bucket avatares), obligatoria para prestadores */
+  fotoPerfil: { uri: string; mimeType?: string } | null;
   terminos: boolean;
 };
 
@@ -67,6 +71,8 @@ export const CATEGORIAS = [
   'Limpieza',
   'Jardinería',
 ];
+
+const TIPOS_FOTO_PERFIL = ['image/jpeg', 'image/png', 'image/webp'];
 
 // ---------- Validaciones ----------
 
@@ -112,6 +118,10 @@ export function validarPrestador(d: DatosPrestador): ErroresRegistro {
     e.experiencia = 'Cuéntanos un poco más de tu experiencia.';
   }
   if (!d.foto) e.foto = 'Sube una foto de tu identificación.';
+  if (!d.fotoPerfil) e.fotoPerfil = 'Agrega tu foto de perfil.';
+  else if (d.fotoPerfil.mimeType && !TIPOS_FOTO_PERFIL.includes(d.fotoPerfil.mimeType)) {
+    e.fotoPerfil = 'La foto debe ser JPG, PNG o WEBP.';
+  }
   return e;
 }
 
@@ -162,22 +172,33 @@ export async function registrarPrestador(d: DatosPrestador): Promise<ResultadoRe
 
   if (error || !data) return { error, requiereConfirmacion: false };
 
-  // Sin sesión (correo por confirmar) todavía no se puede subir la foto.
+  // Sin sesión (correo por confirmar) todavía no se pueden subir las fotos:
+  // al iniciar sesión, Inicio le pide la foto de perfil al prestador.
   if (!data.session || !data.user) {
     return {
       error: null,
       requiereConfirmacion: true,
-      aviso: 'Cuando confirmes tu correo, sube tu identificación desde tu perfil.',
+      aviso: 'Cuando confirmes tu correo e inicies sesión, sube tu foto de perfil y tu identificación desde tu perfil.',
     };
   }
 
-  const subida = await subirIdentificacion(data.user.id, d.foto!);
+  const idUsuario = data.user.id;
+  const [perfil, identificacion] = await Promise.all([
+    subirFotoPerfil(idUsuario, d.fotoPerfil!.uri, d.fotoPerfil!.mimeType ?? 'image/jpeg'),
+    subirIdentificacion(idUsuario, d.foto!),
+  ]);
+
+  const fallas = [
+    perfil.error ? 'tu foto de perfil' : null,
+    identificacion ? null : 'tu identificación',
+  ].filter(Boolean);
+
   return {
     error: null,
     requiereConfirmacion: false,
-    aviso: subida
-      ? undefined
-      : 'Tu cuenta se creó, pero no pudimos subir la foto. Inténtalo desde tu perfil.',
+    aviso: fallas.length
+      ? `Tu cuenta se creó, pero no pudimos subir ${fallas.join(' ni ')}. Inténtalo desde tu perfil.`
+      : undefined,
   };
 }
 
