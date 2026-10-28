@@ -16,6 +16,11 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="publicar">
+        <NativeTabs.Trigger.Label>Publicar</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon src={require('@/assets/images/tabIcons/explore.png')} renderingMode="template" />
+      </NativeTabs.Trigger>
+
       {/* Pantalla de edición de perfil: src/app/(tabs)/perfil.tsx */}
       <NativeTabs.Trigger name="perfil">
         <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
