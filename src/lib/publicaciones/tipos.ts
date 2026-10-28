@@ -1,6 +1,6 @@
-// src/lib/publicaciones/tipos.ts — Contrato de datos de publicaciones (Sprint 4)
+// src/lib/publicaciones/tipos.ts — Contrato de datos de publicaciones (Sprint 4 y 5)
 // Lo comparten la API (src/app/api) y la app (src/services/publicaciones.ts).
-// Debe coincidir con supabase/03_sprint4_publicaciones.sql y docs/openapi.json.
+// Debe coincidir con supabase/03_sprint4_publicaciones.sql, 04_sprint5_galeria.sql y docs/openapi*.json.
 
 export const TIPOS_PUBLICACION = ['PRODUCTO', 'SERVICIO'] as const;
 export type TipoPublicacion = (typeof TIPOS_PUBLICACION)[number];
@@ -82,6 +82,24 @@ export type NuevaPublicacion = {
   imagenes: string[];
   latitud?: number | null;
   longitud?: number | null;
+};
+
+/**
+ * Cuerpo de PUT /api/publications/:id/images (Sprint 5).
+ * Lista FINAL de fotos en orden (la primera es la portada):
+ *   - las que se conservan van con su ruta actual,
+ *   - las nuevas con la ruta donde se acaban de subir,
+ *   - las que no vengan se eliminan de la publicación y del bucket.
+ */
+export type CambioGaleria = {
+  imagenes: string[];
+};
+
+/** Respuesta 200 de PUT /api/publications/:id/images */
+export type GaleriaActualizada = {
+  data: Publicacion;
+  /** Cuántos archivos se borraron del bucket */
+  eliminadas: number;
 };
 
 export type CampoPublicacion =

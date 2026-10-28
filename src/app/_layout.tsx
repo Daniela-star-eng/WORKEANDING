@@ -26,9 +26,10 @@ function NavegacionRaiz() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Con sesión: la app (Inicio y Perfil) */}
+        {/* Con sesión: la app (Inicio y Perfil) y la edición de publicaciones */}
         <Stack.Protected guard={!!session}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="publicacion/[id]/editar" />
         </Stack.Protected>
 
         {/* Sin sesión: login y registro */}

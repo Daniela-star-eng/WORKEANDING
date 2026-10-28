@@ -2,12 +2,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton, SecondaryButton } from '@/components/auth/AuthComponents';
 import { formStyles as fs } from '@/components/auth/formStyles';
 import { colors, styles } from '@/components/auth/styles';
+import MisPublicaciones from '@/components/publicaciones/MisPublicaciones';
 import { BottomTabInset } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { cerrarSesion } from '@/services/auth';
@@ -29,12 +30,13 @@ export default function InicioScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={[fs.dashWrap, { paddingBottom: BottomTabInset + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[fs.dashWrap, { flexGrow: 1, paddingBottom: BottomTabInset + 24 }]}>
         <Text style={fs.dashBadge}>{esPrestador ? 'PRESTADOR' : 'CLIENTE'}</Text>
         <Text style={[styles.title, { textAlign: 'center' }]}>¡Hola, {primerNombre}!</Text>
         <Text style={[styles.subtitle, { textAlign: 'center' }]}>
           {esPrestador
-            ? 'Muy pronto podrás publicar tus servicios para ponerlos en renta.'
+            ? 'Administra tus publicaciones y mantén sus fotos al día.'
             : 'Muy pronto podrás buscar y rentar servicios cerca de ti.'}
         </Text>
 
@@ -47,6 +49,8 @@ export default function InicioScreen() {
           </View>
         ) : null}
 
+        {esPrestador ? <MisPublicaciones /> : null}
+
         <View style={fs.dashButtonWrap}>
           <PrimaryButton
             label={esPrestador && !perfil.foto_url ? 'Subir foto de perfil' : 'Completar mi perfil'}
@@ -55,7 +59,7 @@ export default function InicioScreen() {
           <View style={fs.sectionGap} />
           <SecondaryButton label="Cerrar sesión" onPress={cerrarSesion} />
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
