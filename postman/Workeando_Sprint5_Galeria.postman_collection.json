@@ -1,0 +1,1266 @@
+{
+	"info": {
+		"_postman_id": "48e007a2-1d9f-405b-ad06-be2c2df12183",
+		"name": "Workeando Sprint 5 - Galería al editar",
+		"description": "Pruebas de PUT /api/publications/:id/images: agregar, reordenar, reemplazar y eliminar fotografías, y que los archivos descartados se borren del bucket.\n\nAntes de correrla:\n1. Ejecuta supabase/04_sprint5_galeria.sql en Supabase.\n2. Arranca la app con `npx expo start`.\n3. Usa el mismo entorno del Sprint 4 (postman/Workeando_local.postman_environment.json) y la misma foto postman/foto_prueba.jpg.\n4. Run collection.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Preparación",
+			"item": [
+				{
+					"name": "0.1 Login prestador",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "password"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Login correcto (200)', () => pm.response.to.have.status(200));",
+									"const r = pm.response.json();",
+									"pm.collectionVariables.set('access_token', r.access_token);",
+									"pm.collectionVariables.set('user_id', r.user.id);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.2 Login cliente",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"auth",
+								"v1",
+								"token"
+							],
+							"query": [
+								{
+									"key": "grant_type",
+									"value": "password"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{email_cliente}}\",\n  \"password\": \"{{password_cliente}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Login correcto (200)', () => pm.response.to.have.status(200));",
+									"const r = pm.response.json();",
+									"pm.collectionVariables.set('token_cliente', r.access_token);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.3 Subir foto A",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/storage/v1/object/publicaciones/{{imagen_a}}",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"storage",
+								"v1",
+								"object",
+								"publicaciones",
+								"{{imagen_a}}"
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "image/jpeg"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "foto_prueba.jpg"
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('imagen_a', pm.collectionVariables.get('user_id') + '/postman-' + Date.now() + '-a.jpg');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Foto subida (200)', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.4 Subir foto B",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/storage/v1/object/publicaciones/{{imagen_b}}",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"storage",
+								"v1",
+								"object",
+								"publicaciones",
+								"{{imagen_b}}"
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "image/jpeg"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "foto_prueba.jpg"
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('imagen_b', pm.collectionVariables.get('user_id') + '/postman-' + Date.now() + '-b.jpg');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Foto subida (200)', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.5 Subir foto C",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/storage/v1/object/publicaciones/{{imagen_c}}",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"storage",
+								"v1",
+								"object",
+								"publicaciones",
+								"{{imagen_c}}"
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "image/jpeg"
+							}
+						],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "foto_prueba.jpg"
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('imagen_c', pm.collectionVariables.get('user_id') + '/postman-' + Date.now() + '-c.jpg');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Foto subida (200)', () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.6 Categoría de producto",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/categories?tipo=PRODUCTO",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"categories"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "PRODUCTO"
+								}
+							]
+						},
+						"method": "GET",
+						"header": []
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.collectionVariables.set('categoria_id', pm.response.json().data[0].id);"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "0.7 Crear publicación con la foto A",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications"
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"titulo\": \"Taladro para probar galería\",\n  \"descripcion\": \"Publicación de prueba del Sprint 5 para editar fotografías.\",\n  \"precio\": 150,\n  \"unidad_precio\": \"DIA\",\n  \"categoria_id\": {{categoria_id}},\n  \"imagenes\": [\"{{imagen_a}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 201', () => pm.response.to.have.status(201));",
+									"pm.collectionVariables.set('publicacion_id', pm.response.json().data.id);"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1. PUT /api/publications/:id/images (éxito)",
+			"item": [
+				{
+					"name": "1.1 Agregar la foto B",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_a}}\", \"{{imagen_b}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"const p = pm.response.json().data; const rutas = p.imagenes.map(i => i.ruta);",
+									"pm.test('Ahora tiene 2 fotos en orden', () => pm.expect(rutas).to.eql([pm.collectionVariables.get('imagen_a'), pm.collectionVariables.get('imagen_b')]));",
+									"pm.test('Orden 1 y 2', () => pm.expect(p.imagenes.map(i => i.orden)).to.eql([1, 2]));",
+									"pm.test('URL pública en cada foto', () => p.imagenes.forEach(i => pm.expect(i.url).to.include('/publicaciones/' + i.ruta)));",
+									"pm.test('No borró nada', () => pm.expect(pm.response.json().eliminadas).to.eql(0));",
+									"pm.test('Responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.2 Cambiar la portada (B primero)",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_b}}\", \"{{imagen_a}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"const p = pm.response.json().data; const rutas = p.imagenes.map(i => i.ruta);",
+									"pm.test('B es la portada', () => pm.expect(rutas[0]).to.eql(pm.collectionVariables.get('imagen_b')));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.3 Reemplazar A por C",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_b}}\", \"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"const p = pm.response.json().data; const rutas = p.imagenes.map(i => i.ruta);",
+									"pm.test('C ocupa el lugar de A', () => pm.expect(rutas).to.eql([pm.collectionVariables.get('imagen_b'), pm.collectionVariables.get('imagen_c')]));",
+									"pm.test('Borró 1 archivo del bucket', () => pm.expect(pm.response.json().eliminadas).to.eql(1));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.4 La foto A ya no está en Storage",
+					"request": {
+						"url": {
+							"raw": "{{supabase_url}}/storage/v1/object/authenticated/publicaciones/{{imagen_a}}",
+							"host": [
+								"{{supabase_url}}"
+							],
+							"path": [
+								"storage",
+								"v1",
+								"object",
+								"authenticated",
+								"publicaciones",
+								"{{imagen_a}}"
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "apikey",
+								"value": "{{anon_key}}"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"description": "Sincronización con el almacenamiento: el archivo descartado se borró del bucket."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('No existe (400/404)', () => pm.expect(pm.response.code).to.be.oneOf([400, 404]));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.5 Eliminar la foto B",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"const p = pm.response.json().data; const rutas = p.imagenes.map(i => i.ruta);",
+									"pm.test('Solo queda C', () => pm.expect(rutas).to.eql([pm.collectionVariables.get('imagen_c')]));",
+									"pm.test('Borró 1 archivo del bucket', () => pm.expect(pm.response.json().eliminadas).to.eql(1));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "1.6 El detalle refleja la galería",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}"
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Una foto, la C, como portada', () => { const im = pm.response.json().data.imagenes; pm.expect(im).to.have.lengthOf(1); pm.expect(im[0].ruta).to.eql(pm.collectionVariables.get('imagen_c')); pm.expect(im[0].orden).to.eql(1); });"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Validaciones y seguridad",
+			"item": [
+				{
+					"name": "2.1 Sin fotografías - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('al menos una'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.2 Más de 8 - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{user_id}}/f0.jpg\", \"{{user_id}}/f1.jpg\", \"{{user_id}}/f2.jpg\", \"{{user_id}}/f3.jpg\", \"{{user_id}}/f4.jpg\", \"{{user_id}}/f5.jpg\", \"{{user_id}}/f6.jpg\", \"{{user_id}}/f7.jpg\", \"{{user_id}}/f8.jpg\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('máximo 8'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.3 Fotos repetidas - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_c}}\", \"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('repetidas'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.4 Foto de otro usuario - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"00000000-0000-0000-0000-000000000000/ajena.jpg\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('subiste'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.5 Foto que no se subió - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{user_id}}/no-existe.jpg\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo imagenes', () => pm.expect(e.campos).to.have.property('imagenes'));",
+									"pm.test('Mensaje en español', () => pm.expect(e.campos['imagenes']).to.include('No se encontró'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.6 Cuerpo que no es JSON - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "esto no es json",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));",
+									"const e = pm.response.json().error;",
+									"pm.test('Código VALIDACION', () => pm.expect(e.codigo).to.eql('VALIDACION'));",
+									"pm.test('Marca el campo cuerpo', () => pm.expect(e.campos).to.have.property('cuerpo'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.7 Sin sesión - 401",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 401', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.8 Otro usuario (cliente) - 404",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_cliente}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"description": "Un usuario que no es el autor no puede cambiar las fotos.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 404', () => pm.response.to.have.status(404));",
+									"pm.test('Código NO_ENCONTRADO', () => pm.expect(pm.response.json().error.codigo).to.eql('NO_ENCONTRADO'));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.9 Id inválido - 400",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/123/images",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"123",
+								"images"
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"imagenes\": [\"{{imagen_c}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "2.10 La galería no cambió tras los errores",
+					"request": {
+						"url": {
+							"raw": "{{base_url}}/api/publications/{{publicacion_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"publications",
+								"{{publicacion_id}}"
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Responde 200', () => pm.response.to.have.status(200));",
+									"pm.test('Sigue solo la foto C', () => pm.expect(pm.response.json().data.imagenes.map(i => i.ruta)).to.eql([pm.collectionVariables.get('imagen_c')]));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8081",
+			"type": "any"
+		},
+		{
+			"key": "supabase_url",
+			"value": "https://TU-PROYECTO.supabase.co",
+			"type": "any"
+		},
+		{
+			"key": "anon_key",
+			"value": "PEGA_AQUI_TU_ANON_KEY",
+			"type": "any"
+		},
+		{
+			"key": "email",
+			"value": "prestador@workeando.com",
+			"type": "any"
+		},
+		{
+			"key": "password",
+			"value": "PruebaSprint4",
+			"type": "any"
+		},
+		{
+			"key": "email_cliente",
+			"value": "cliente@workeando.com",
+			"type": "any"
+		},
+		{
+			"key": "password_cliente",
+			"value": "PruebaSprint4",
+			"type": "any"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "token_cliente",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "categoria_id",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "imagen_a",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "imagen_b",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "imagen_c",
+			"value": "",
+			"type": "any"
+		},
+		{
+			"key": "publicacion_id",
+			"value": "",
+			"type": "any"
+		}
+	]
+}

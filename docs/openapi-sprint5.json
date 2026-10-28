@@ -1,0 +1,216 @@
+{
+    "tags": [
+      {
+        "name": "Galería",
+        "description": "Sprint 5 · Agregar, reemplazar o eliminar fotografías al editar una publicación"
+      }
+    ],
+    "paths": {
+      "/api/publications/{id}/images": {
+        "put": {
+          "tags": [
+            "Galería"
+          ],
+          "summary": "Actualizar las fotografías de una publicación",
+          "description": "Recibe la **lista final** de fotos en orden (la primera es la portada). Solo el autor puede usarla.\n\n- **Conservar**: manda la `ruta` actual de la foto.\n- **Agregar**: sube primero el archivo al bucket `publicaciones` en `<id del usuario>/<nombre>.jpg` y manda esa ruta.\n- **Eliminar**: no la incluyas en la lista.\n- **Reemplazar**: pon la ruta nueva en el lugar de la que quitas.\n- **Cambiar portada**: cambia el orden.\n\nLa base de datos sincroniza `imagenes_publicacion` en una sola transacción y después la API borra del bucket los archivos descartados (`eliminadas`).",
+          "operationId": "actualizarGaleria",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CambioGaleria"
+                },
+                "examples": {
+                  "reemplazar": {
+                    "summary": "Reemplazar la portada y conservar la segunda",
+                    "value": {
+                      "imagenes": [
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/nueva-portada.jpg",
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-2.jpg"
+                      ]
+                    }
+                  },
+                  "eliminar": {
+                    "summary": "Eliminar todas menos una",
+                    "value": {
+                      "imagenes": [
+                        "3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/taladro-1.jpg"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Galería actualizada",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "data",
+                      "eliminadas"
+                    ],
+                    "properties": {
+                      "data": {
+                        "$ref": "#/components/schemas/Publicacion"
+                      },
+                      "eliminadas": {
+                        "type": "integer",
+                        "description": "Archivos borrados del bucket"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Lista inválida",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "vacia": {
+                      "summary": "Sin fotografías",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "Revisa las fotografías.",
+                          "campos": {
+                            "imagenes": "Agrega al menos una fotografía."
+                          }
+                        }
+                      }
+                    },
+                    "muchas": {
+                      "summary": "Más de 8",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "Revisa las fotografías.",
+                          "campos": {
+                            "imagenes": "Puedes agregar máximo 8 fotografías."
+                          }
+                        }
+                      }
+                    },
+                    "ajena": {
+                      "summary": "Foto de otro usuario",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "Revisa las fotografías.",
+                          "campos": {
+                            "imagenes": "Solo puedes usar fotografías que subiste tú."
+                          }
+                        }
+                      }
+                    },
+                    "no_subida": {
+                      "summary": "No está en Storage",
+                      "value": {
+                        "error": {
+                          "codigo": "VALIDACION",
+                          "mensaje": "No se encontró la fotografía 3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/noexiste.jpg. Súbela antes de guardar.",
+                          "campos": {
+                            "imagenes": "No se encontró la fotografía 3f1c2b9a-6d1e-4a51-9a6c-1b2f3e4d5c6a/noexiste.jpg. Súbela antes de guardar."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "$ref": "#/components/responses/NoAutenticado"
+            },
+            "404": {
+              "description": "No existe o no es del usuario",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "no": {
+                      "summary": "No encontrada",
+                      "value": {
+                        "error": {
+                          "codigo": "NO_ENCONTRADO",
+                          "mensaje": "La publicación no existe o no es tuya."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error inesperado del servidor",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RespuestaError"
+                  },
+                  "examples": {
+                    "interno": {
+                      "summary": "Error interno",
+                      "value": {
+                        "error": {
+                          "codigo": "ERROR_INTERNO",
+                          "mensaje": "Ocurrió un error inesperado. Inténtalo de nuevo."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "CambioGaleria": {
+        "type": "object",
+        "required": [
+          "imagenes"
+        ],
+        "properties": {
+          "imagenes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "description": "Lista final de rutas en el bucket `publicaciones`. La primera es la portada.",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f-]{36}/[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$"
+            }
+          }
+        }
+      }
+    }
+  }

@@ -28,8 +28,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Necesitamos acceder a tus fotos para subir tu foto de perfil o tu identificación.",
-          "cameraPermission": "Necesitamos usar la cámara para tomar tu foto de perfil o la foto de tu identificación."
+          "photosPermission": "Necesitamos acceder a tus fotos para tu foto de perfil, tu identificación y las fotografías de tus publicaciones.",
+          "cameraPermission": "Necesitamos usar la cámara para tomar tu foto de perfil, tu identificación o las fotografías de tus publicaciones."
         }
       ],
       [
